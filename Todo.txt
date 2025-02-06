@@ -1,0 +1,38 @@
+#what i want to make
+
+Todo: 
+CyberSecurity
+
+Stack: Golang, MySQL, Redis, Nginx, Docker, Messaging Queue, CI/CD, Heroku/DigitalOcean/GCP, Context, Grafana
+
+problem:
+
+manage authentication 
+email verification
+guest user
+two people want to edit at the same time 
+
+Working:
+
+To add/update/delete to do listing 
+update user edit and see previous info
+make a todo when some change happens it send notification to all of its subscriber 
+access by unique uri
+
+
+User Role and Responsibility:
+
+Block update by other users
+Visibile to all or only me or delete option
+
+Schema:
+
+Updated By others 
+DeleteDate
+Visibility
+Tags
+
+Security:
+
+Csrf token
+Ratelimiter
