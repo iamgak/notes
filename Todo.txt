@@ -36,3 +36,8 @@ Security:
 
 Csrf token
 Ratelimiter
+
+
+Todo:
+
+add middlewares
