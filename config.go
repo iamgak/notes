@@ -3,8 +3,13 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 func openDB(dsn string) (*sql.DB, error) {
@@ -28,4 +33,23 @@ func InitRedis(name, passw string) *redis.Client {
 	})
 
 	return client
+}
+
+func InitGoogleOAuth() (*oauth2.Config, error) {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file:", err)
+		return nil, err
+	}
+
+	return &oauth2.Config{
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		RedirectURL:  "http://localhost:8080/callback",
+		Scopes: []string{
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		Endpoint: google.Endpoint,
+	}, nil
 }

@@ -25,29 +25,29 @@ type ToDo struct {
 }
 
 type Application struct {
-	Config          Config
+	// Config          Config
 	Model           *models.ToDoDB
 	Uid             int
 	isAuthenticated bool
 	// isAdmin         bool
 }
 
-type Config struct {
-	port int
-	env  string
-	// db   struct {
-	// 	dsn          string
-	// 	maxOpenConns int
-	// 	maxIdleConns int
-	// 	maxIdleTime  string
-	// }
-}
+// type Config struct {
+// 	port int
+// 	env  string
+// 	// db   struct {
+// 	// 	dsn          string
+// 	// 	maxOpenConns int
+// 	// 	maxIdleConns int
+// 	// 	maxIdleTime  string
+// 	// }
+// }
 
 // const version = "1.0.0.0"
 
 func main() {
 	fmt.Print("To do Web App startet \n")
-	var cfg Config
+	// var cfg Config
 
 	err := godotenv.Load()
 	if err != nil {
@@ -75,8 +75,8 @@ func main() {
 	redis_password := ""
 	client := InitRedis(redis_name, redis_password)
 	app := Application{
-		Model:  models.NewModels(db, client),
-		Config: cfg,
+		Model: models.NewModels(db, client),
+		// Config: cfg,
 	}
 
 	maxHeaderBytes := 1 << 20
