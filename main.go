@@ -26,9 +26,10 @@ type ToDo struct {
 
 type Application struct {
 	// Config          Config
-	Model           *models.ToDoDB
+	Model           *models.Init
 	Uid             int
 	isAuthenticated bool
+
 	// isAdmin         bool
 }
 
@@ -75,7 +76,7 @@ func main() {
 	redis_password := ""
 	client := InitRedis(redis_name, redis_password)
 	app := Application{
-		Model: models.NewModels(db, client),
+		Model: models.Constructor(db, client),
 		// Config: cfg,
 	}
 

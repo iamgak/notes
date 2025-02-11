@@ -22,19 +22,19 @@ type ToDo struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-type ToDoDB struct {
+type ToDoModel struct {
 	db    *sql.DB
 	redis *redis.Client
 }
 
-func (m *ToDoDB) Close() {
+func (m *ToDoModel) Close() {
 	m.redis.Close()
 	m.db.Close()
 }
 
-func NewModels(db *sql.DB, redis *redis.Client) *ToDoDB {
+func NewModels(db *sql.DB, redis *redis.Client) *ToDoModel {
 	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	return &ToDoDB{
+	return &ToDoModel{
 		db:    db,
 		redis: redis,
 		// cancel: cancel,
@@ -42,7 +42,7 @@ func NewModels(db *sql.DB, redis *redis.Client) *ToDoDB {
 	}
 }
 
-func (c *ToDoDB) CreateTodo(ctx context.Context, todo *ToDo) error {
+func (c *ToDoModel) CreateTodo(ctx context.Context, todo *ToDo) error {
 	query := `INSERT INTO todo (title, content, visibility, editable, created_at, updated_at)
 			  VALUES (?, ?, ?, ?, ?, ?)`
 
@@ -56,7 +56,7 @@ func (c *ToDoDB) CreateTodo(ctx context.Context, todo *ToDo) error {
 	return err
 }
 
-func (c *ToDoDB) UpdateTodo(ctx context.Context, id int, todo *ToDo) error {
+func (c *ToDoModel) UpdateTodo(ctx context.Context, id int, todo *ToDo) error {
 	query := `UPDATE todo
 			  SET title = ?, content = ?, visibility = ?, editable = ?, updated_at = ?
 			  WHERE id = ?`
@@ -72,7 +72,7 @@ func (c *ToDoDB) UpdateTodo(ctx context.Context, id int, todo *ToDo) error {
 	return err
 }
 
-func (c *ToDoDB) ToDoListing(ctx context.Context) ([]*ToDo, error) {
+func (c *ToDoModel) ToDoListing(ctx context.Context) ([]*ToDo, error) {
 	query := `SELECT id, title, content, visibility, editable, deleted, updated, version, created_at, updated_at 
 				FROM todo`
 
@@ -131,7 +131,7 @@ func (c *ToDoDB) ToDoListing(ctx context.Context) ([]*ToDo, error) {
 	return listing, err
 }
 
-func (c *ToDoDB) getRedis(ctx context.Context, key string) ([]*ToDo, error) {
+func (c *ToDoModel) getRedis(ctx context.Context, key string) ([]*ToDo, error) {
 	var listing []*ToDo
 	val, err := c.redis.Get(ctx, key).Result()
 	if err != nil {
@@ -143,7 +143,7 @@ func (c *ToDoDB) getRedis(ctx context.Context, key string) ([]*ToDo, error) {
 	return listing, err
 }
 
-func (c *ToDoDB) setRedis(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+func (c *ToDoModel) setRedis(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err

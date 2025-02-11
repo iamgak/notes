@@ -10,28 +10,21 @@ func (app *Application) InitRouter() *gin.Engine {
 	r.Use(gin.Recovery())
 
 	// read API
-	r.GET("/", app.listTodos)
-	r.GET("/ping", func(c *gin.Context) {
+	r.GET("/", secureHeaders(), app.LoginMiddleware(), app.listTodos)
+	// r.GET("/", secureHeaders(), app.listTodos)
+	r.GET("/user/login", secureHeaders(), func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"message": "pong",
+			"message": "Page: login",
 		})
 	})
 
 	// write API
-	r.POST("/", app.createTodo)
-	r.POST("/update", app.updateTodo)
+	r.POST("/", secureHeaders(), app.LoginMiddleware(), app.createTodo)
+	r.POST("/update", secureHeaders(), app.LoginMiddleware(), app.updateTodo)
 
 	// r.GET("/", app.getNotesListing)
 
-	// Apply middleware to routes
-	// r.POST("/secure", authMiddleware(), func(c *gin.Context) {
-	// 	c.JSON(200, gin.H{
-	// 		"Secure": true,
-	// 	})
-	// 	// This route is now protected and requires authentication
-	// })
-
-	r.GET("/google_login", app.GoogleLogin)
-	r.GET("/callback", app.GoogleCallback)
+	r.GET("/google_login", secureHeaders(), app.GoogleLogin)
+	r.GET("/callback", secureHeaders(), app.GoogleCallback)
 	return r
 }

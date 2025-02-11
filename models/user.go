@@ -1,179 +1,154 @@
 package models
 
 import (
-	"context"
 	"database/sql"
-	"strings"
+	"fmt"
+	"os"
+	"time"
 
+	"github.com/golang-jwt/jwt"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/crypto/bcrypt"
 )
 
-type UserLogin struct {
-	Email    string
-	Password string
+type User struct {
+	Email  string
+	Name   string
+	UserID int64
 }
 
-type ForgetPassword struct {
-	Email string
+type UserData struct {
+	OAuthID string `json:"id"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
+	OAuth   string `json:"oauth,omitempty"`
+	IpAddr  string `json:"_,omitempty"`
 }
 
-type UserRegister struct {
-	Email          string
-	Password       string
-	RepeatPassword string
+type UserSession struct {
+	ID         int       `db:"id"`
+	UserID     int       `db:"user_id"`
+	LoginToken string    `db:"login_token"`
+	Superseded bool      `db:"superseded"`
+	CreatedAt  time.Time `db:"created_at"`
 }
 
-type UserNewPassword struct {
-	Password       string
-	RepeatPassword string
+type MyCustomClaims struct {
+	Username string `json:"username"`
+	UserID   int64  `json:"user_id"`
+	jwt.StandardClaims
 }
 
 // to use main db that initialised in main.go
 type UserModel struct {
-	db     *sql.DB
-	redis  *redis.Client
-	ctx    context.Context
-	cancel context.CancelFunc
+	db    *sql.DB
+	redis *redis.Client
 }
 
-func (m *UserModel) InsertUser(email, password, hashed string) (int64, error) {
-	HashedPassword, err := m.GeneratePassword(password)
+func (u *UserModel) UserInit(db *sql.DB, redis *redis.Client) UserModel {
+	return UserModel{
+		db:    db,
+		redis: redis,
+	}
+}
+func (m *UserModel) AuthUser(userdata UserData) (string, error) {
+	var user_id int64
+	err := m.db.QueryRow("SELECT id  FROM users WHERE email = ?", userdata.Email).Scan(&user_id)
 	if err != nil {
-		return 0, err
+		if err != sql.ErrNoRows {
+			return "", err
+		}
+
+		fmt.Println(userdata)
+		// User is not registered, save the user information to the database
+		stmt := "INSERT INTO users (email, name, oauth, oauth_id, picture) VALUES (?, ?, ?,?,?)"
+		result, err := m.db.Exec(stmt, userdata.Email, userdata.Name, userdata.OAuth, userdata.OAuthID, userdata.Picture)
+		if err != nil {
+			fmt.Println(err, stmt)
+			return "", err
+		}
+
+		user_id, err = result.LastInsertId()
+		if err != nil {
+			return "", err
+		}
 	}
 
-	result, err := m.db.Exec("INSERT INTO users(`email`,`password`,`activation_token`) VALUES (?, ?,? )", email, string(HashedPassword), hashed)
+	fmt.Println(user_id)
+	login_token, err := m.generateToken(userdata.Name, user_id)
+	fmt.Println("generate token", login_token)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return result.LastInsertId()
+
+	err = m.SetLoginToken(login_token, userdata.IpAddr, user_id)
+	return login_token, err
 }
 
-func (m *UserModel) SetLoginToken(token string, uid int64) error {
-	_, err := m.db.Exec("UPDATE `users` SET `login_token` = ? WHERE `id` = ?", token, uid)
+func (m *UserModel) ValidToken(login_token string) (int, error) {
+	var user_id int
+	err := m.db.QueryRow("SELECT user_id FROM users_session WHERE login_token = ? AND superseded = 0", login_token).Scan(&user_id)
+	return user_id, err
+}
+
+func (m *UserModel) SetLoginToken(token, ip_addr string, user_id int64) error {
+	err := m.Logout(user_id)
+	fmt.Println("login token update", err)
+	stmt := fmt.Sprintf("INSERT INTO users_session (login_token, user_id, ip_addr) VALUES ('%s', '%d', '%s' )", token, user_id, ip_addr)
+	fmt.Print(stmt)
+	if err == nil {
+		_, err = m.db.Exec(stmt)
+	}
+
 	return err
 }
 
 // logout
-func (m *UserModel) Logout(uid int64) error {
-	_, err := m.db.Exec("UPDATE `users` SET `login_token` = NULL WHERE `id` = ?", uid)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (m *UserModel) Login(creds *UserLogin) (int64, error) {
-	var databasePassword string
-	var uid int64
-
-	// Begin a transaction (optional)
-	tx, err := m.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback() // Rollback if we encounter an error before commit
-
-	// Query for active user by email
-	err = tx.QueryRow("SELECT password, id FROM `users` WHERE `active` = 1 AND `email` = ?", strings.TrimSpace(creds.Email)).
-		Scan(&databasePassword, &uid)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// No user found with the given email
-			return 0, ErrUserNotFound
-		}
-		// Other database error
-		return 0, err
-	}
-
-	// Compare passwords
-	err = bcrypt.CompareHashAndPassword([]byte(databasePassword), []byte(creds.Password))
-	if err != nil {
-		if err == bcrypt.ErrMismatchedHashAndPassword {
-			// Incorrect password
-			return 0, ErrIncorrectPassword
-		}
-		// Other bcrypt error
-		return 0, err
-	}
-
-	// Commit transaction (optional)
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-
-	// Return user ID on successful login
-	return uid, nil
-}
-
-func (m *UserModel) EmailExist(email string) int64 {
-	var uid int64
-	_ = m.db.QueryRow("SELECT `id` FROM `users` WHERE  `email` = ?", email).Scan(&uid)
-	return uid
-}
-
-func (m *UserModel) ValidUser(token string) (int64, error) {
-	var id int64
-	err := m.db.QueryRow("SELECT `id` FROM `users` WHERE `login_token` = ? ", token).Scan(&id)
-	return id, err
-}
-
-func (m *UserModel) ValidURI(uri string) bool {
-	var exists int64
-	query := "SELECT 1 FROM users WHERE activation_token = ? AND active = 0"
-	err := m.db.QueryRow(query, uri).Scan(&exists)
-	if err != nil {
-		return false
-	}
-
-	return exists > 0
-}
-
-func (m *UserModel) AccountActivate(token string) error {
-	_, err := m.db.Exec("UPDATE `users` SET `activation_token` = NULL, `active` = 1 WHERE `activation_token` = ? ", token)
+func (m *UserModel) Logout(user_id int64) error {
+	_, err := m.db.Exec("UPDATE `users_session` SET `superseded` = 1 WHERE  `id` = ?", user_id)
 	return err
-}
-
-func (m *UserModel) ForgetPassword(uid int64, uri string) error {
-	_, _ = m.db.Exec("UPDATE `forget_passw` SET `superseded` = 1 WHERE `uid` = ?", uid)
-	_, err := m.db.Exec("INSERT INTO `forget_passw` (`uid`,`uri`,`superseded`) VALUES(?,?,0) ", uid, uri)
-	return err
-}
-
-func (m *UserModel) ForgetPasswordUri(uri string) (int64, error) {
-	var result int64
-	err := m.db.QueryRow("SELECT uid FROM `forget_passw` WHERE `uri` = ? AND `superseded` = 0", uri).Scan(&result)
-	if err != nil {
-		return 0, err
-	}
-
-	return result, nil
-}
-
-func (m *UserModel) NewPassword(newPassword string, id int64) error {
-	newHashedPassword, err := m.GeneratePassword(newPassword)
-	if err != nil {
-		return err
-	}
-
-	stmt := "UPDATE users SET password = ? WHERE id = ?"
-	_, err = m.db.Exec(stmt, string(newHashedPassword), id)
-	if err != nil {
-		return err
-	}
-
-	_, _ = m.db.Exec("UPDATE `forget_passw` SET `superseded` =1 WHERE `uid` = ?", id)
-	m.ActivityLog("password_changed", id)
-	return nil
-}
-
-func (m *UserModel) GeneratePassword(newPassword string) ([]byte, error) {
-	newHashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
-	return newHashedPassword, err
 }
 
 func (m *UserModel) ActivityLog(activity string, uid int64) {
 	_, _ = m.db.Exec("UPDATE `user_log` SET superseded = 1 WHERE activity = ? AND uid = ?", activity, uid)
 	_, _ = m.db.Exec("INSERT INTO `user_log` SET  activity = ? , uid = ?, superseded = 0", activity, uid)
+}
+
+// create a token for login, user_verification
+// func (app *UserModel) generateToken(addr string, port, user_id int) string {
+// 	data := fmt.Sprintf("Login token %s %d %s", addr, port, strconv.FormatInt(time.Now().Unix(), 10))
+// 	hasher := sha1.New()
+// 	hasher.Write([]byte(data))
+// 	hash := hasher.Sum(nil)
+// 	// Convert hash bytes to a hexadecimal string
+// 	hashStr := fmt.Sprintf("%x", hash)
+
+// 	return hashStr
+// }
+
+func (m *UserModel) generateToken(username string, user_id int64) (string, error) {
+	// Create the claims
+
+	err := godotenv.Load()
+	if err != nil {
+		return "", err
+	}
+
+	mySigningKeyStr := os.Getenv("SIGNING_KEY")
+	mySigningKey := []byte(mySigningKeyStr)
+	claims := MyCustomClaims{
+		username,
+		user_id,
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
+			IssuedAt:  time.Now().Unix(),
+		},
+	}
+
+	// Create the token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Sign the token with the secret key
+	return token.SignedString(mySigningKey)
 }

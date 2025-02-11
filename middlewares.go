@@ -1,21 +1,23 @@
 package main
 
 import (
-	"expvar"
+	"fmt"
 	"net/http"
-	"time"
+	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt"
+	"github.com/joho/godotenv"
 )
 
-func secureHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' fonts.googleapis.com; font-src fonts.gstatic.com")
-		w.Header().Set("Referrer-Policy", "origin-when-cross-origin")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "deny")
-		w.Header().Set("X-XSS-Protection", "0")
-		next.ServeHTTP(w, r)
+func secureHeaders() gin.HandlerFunc {
+	return (func(c *gin.Context) {
+		c.Header("Content-Security-Policy", "default-src 'self'; style-src 'self' fonts.googleapis.com; font-src fonts.gstatic.com")
+		c.Header("Referrer-Policy", "origin-when-cross-origin")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "deny")
+		c.Header("X-XSS-Protection", "0")
+		c.Next()
 	})
 }
 
@@ -52,87 +54,86 @@ func (app *Application) recoverPanic() gin.HandlerFunc {
 	}
 }
 
-// func (app *Application) rateLimit(next http.Handler) http.Handler {
-// 	type client struct {
-// 		limiter  *rate.Limiter
-// 		lastSeen time.Time
-// 	}
+func (app *Application) LoginMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cookie, err := c.Cookie("ldata")
 
-// 	// Declare a mutex and a map to hold the clients' IP addresses and rate limiters.
-// 	var (
-// 		mu      sync.Mutex
-// 		clients = make(map[string]*client)
-// 	)
+		if err != nil || cookie == "" || len(cookie) < 40 {
+			// deleteCookie(c)
+			c.Redirect(http.StatusFound, "/user/login/")
+			c.Abort()
+			return
+		}
 
-// 	go func() {
-// 		for {
-// 			// it will run until code run but take break every minute laziness
-// 			time.Sleep(time.Minute)
-// 			// Lock the mutex to prevent any rate limiter checks from happening while
-// 			// the cleanup is taking place.
-// 			mu.Lock()
-// 			// Loop through all clients. If they haven't been seen within the last three
-// 			// minutes, delete the corresponding entry from the map.
-// 			for ip, client := range clients {
-// 				if time.Since(client.lastSeen) > 3*time.Minute {
-// 					delete(clients, ip)
-// 				}
-// 			}
+		err = godotenv.Load()
+		if err != nil {
+			fmt.Println("Error fetching env:", err)
+			// c.Redirect(http.StatusInternalServerError, "/user/login/")
+			// c.AbortWithStatusJSON(http.StatusInternalServerError,
+			c.JSON(200, gin.H{
+				"message": "Internal Server Error ",
+			})
+			c.Abort()
+			// )
+			return
+		}
+		userID, err := app.Model.Users.ValidToken(cookie)
+		if err != nil {
+			// deleteCookie(c)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			fmt.Println("Error fetching user info:", err)
+			return
+		}
 
-// 			mu.Unlock()
-// 		}
-// 	}()
+		if userID <= 0 {
+			// deleteCookie(c)
+			c.Redirect(http.StatusMovedPermanently, "/user/login/")
+			c.Abort()
+			return
+		}
 
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		app.InfoLog.Printf("ip_addr-%s  http-%s method-%s uri-%s", r.RemoteAddr, r.Proto, r.Method, r.URL.RequestURI())
-// 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-// 		if err != nil {
-// 			app.ServerError(w, err)
-// 			return
-// 		}
-// 		// Lock the mutex to prevent this code from being executed concurrently.
+		// Parse the token
+		SIGNING_KEY := os.Getenv("SIGNING_KEY")
+		if SIGNING_KEY == "" {
+			c.JSON(200, gin.H{
+				"message": "Internal Server Error ",
+			})
 
-// 		mu.Lock()
-// 		if _, found := clients[ip]; !found {
-// 			// Create and add a new client struct to the map if it doesn't already exist.
-// 			clients[ip] = &client{
-// 				limiter: rate.NewLimiter(rate.Limit(app.Config.limiter.rps), app.Config.limiter.burst),
-// 			}
-// 		}
+			fmt.Println("Error fetching info from env: ", SIGNING_KEY)
+			c.Abort()
+			return
+		}
+		token, err := jwt.ParseWithClaims(cookie, &MyCustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+			// Verify the signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("[error] Unexpected signing method: %v", token.Header["alg"])
+			}
 
-// 		clients[ip].lastSeen = time.Now()
-// 		if !clients[ip].limiter.Allow() {
-// 			mu.Unlock()
-// 			app.ErrorMessage(w, http.StatusTooManyRequests, "Too, many request. Rate Limit Exceed")
-// 			return
-// 		}
+			// Return the secret key
+			return []byte(SIGNING_KEY), nil
+		})
 
-// 		mu.Unlock()
-// 		next.ServeHTTP(w, r)
-// 	})
-// }
+		if err != nil {
+			deleteCookie(c)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			fmt.Println("Error fetching info from token:", err)
+			return
+		}
+		// Check if the token is valid
+		if claims, ok := token.Claims.(*MyCustomClaims); ok && token.Valid {
+			// Set the username in the request context
+			c.Header("Username", claims.Username)
 
-func (app *Application) metrics(next http.Handler) http.Handler {
-	// Initialize the new expvar variables when the middleware chain is first built.
-	totalRequestsReceived := expvar.NewInt("total_requests_received")
-	totalResponsesSent := expvar.NewInt("total_responses_sent")
-	totalProcessingTimeMicroseconds := expvar.NewInt("total_processing_time_μs")
-	// The following code will be run for every request...
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Record the time that we started to process the request.
-		start := time.Now()
-		// Use the Add() method to increment the number of requests received by 1.
-		totalRequestsReceived.Add(1)
-		// Call the next handler in the chain.
-		next.ServeHTTP(w, r)
-		// On the way back up the middleware chain, increment the number of responses
-		// sent by 1.
-		totalResponsesSent.Add(1)
-		// Calculate the number of microseconds since we began to process the request,
-		// then increment the total processing time by this amount.
-		duration := time.Since(start).Microseconds()
-		totalProcessingTimeMicroseconds.Add(duration)
-	})
+			app.Uid = userID
+			app.isAuthenticated = true
+			c.Next()
+		} else {
+			// Return an errordeleteCookie(c)
+			c.Redirect(http.StatusMovedPermanently, "/user/login/")
+			c.Abort()
+			return
+		}
+	}
 }
 
 func authMiddleware() gin.HandlerFunc {
@@ -145,4 +146,14 @@ func authMiddleware() gin.HandlerFunc {
 			c.Abort()
 		}
 	}
+}
+
+func deleteCookie(c *gin.Context) {
+	c.SetCookie("ldata", "", -1, "/", "", false, true)
+}
+
+// Define a struct to represent the claims in the JWT
+type MyCustomClaims struct {
+	Username string `json:"username"`
+	jwt.StandardClaims
 }

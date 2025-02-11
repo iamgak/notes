@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,6 +12,16 @@ import (
 	"github.com/iamgak/todo/models"
 	"golang.org/x/oauth2"
 )
+
+// type User struct {
+// 	ID        string
+// 	Email     string
+// 	Name      string
+// 	GoogleID  string
+// 	Picture   string
+// 	OAuth     string
+// 	CreatedAt time.Time
+// }
 
 type Config struct {
 	GoogleLoginConfig oauth2.Config
@@ -22,7 +32,7 @@ var AppConfig Config
 func (app *Application) listTodos(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	todos, err := app.Model.ToDoListing(ctx)
+	todos, err := app.Model.Todo.ToDoListing(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -46,7 +56,7 @@ func (app *Application) updateTodo(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	err = app.Model.UpdateTodo(ctx, id, &todo)
+	err = app.Model.Todo.UpdateTodo(ctx, id, &todo)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -65,7 +75,7 @@ func (app *Application) createTodo(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	err := app.Model.CreateTodo(ctx, &todo)
+	err := app.Model.Todo.CreateTodo(ctx, &todo)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -99,14 +109,25 @@ func (app *Application) GoogleCallback(c *gin.Context) {
 	}
 	defer userInfo.Body.Close()
 
-	// Read the response body and print the user information
-	body, err := ioutil.ReadAll(userInfo.Body)
-	if err != nil {
+	var user models.UserData
+	if err := json.NewDecoder(userInfo.Body).Decode(&user); err != nil {
 		c.AbortWithStatus(http.StatusInternalServerError)
-		fmt.Println("Error reading user info response:", err)
+		fmt.Println("Error decoding user info:", err)
 		return
 	}
-	c.String(http.StatusOK, "User information: %v", string(body))
+
+	// fmt.Println(user)
+	user.OAuth = "google"
+	user.IpAddr = c.ClientIP()
+	loginToken, err := app.Model.Users.AuthUser(user)
+	if err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		fmt.Println("Error authenticating user info:", err)
+		return
+	}
+
+	c.SetCookie("ldata", loginToken, 3600, "/", "", false, true)
+	c.JSON(http.StatusOK, "login Successfully")
 
 }
 
