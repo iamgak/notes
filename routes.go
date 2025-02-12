@@ -9,18 +9,26 @@ func (app *Application) InitRouter() *gin.Engine {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
-	// read API
-	r.GET("/", secureHeaders(), app.LoginMiddleware(), app.listTodos)
-	// r.GET("/", secureHeaders(), app.listTodos)
 	r.GET("/user/login", secureHeaders(), func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Page: login",
 		})
 	})
 
-	// write API
-	r.POST("/", secureHeaders(), app.LoginMiddleware(), app.createTodo)
-	r.POST("/update", secureHeaders(), app.LoginMiddleware(), app.updateTodo)
+	authorise := r.Group("/")
+	authorise.Use(app.LoginMiddleware(), secureHeaders())
+	{
+
+		// read API
+		authorise.GET("/", app.ListTodos)
+		// authorise.GET("/",app.listTodos)
+
+		// write API
+		authorise.POST("/", app.CreateTodo)
+		authorise.POST("/:id/update/", app.UpdateTodo)
+		authorise.POST("/:id/visibilty/:object_id/", app.SetVisibility)
+		authorise.POST("/:id/delete/", app.SoftDelete)
+	}
 
 	// r.GET("/", app.getNotesListing)
 

@@ -29,7 +29,7 @@ type Config struct {
 
 var AppConfig Config
 
-func (app *Application) listTodos(c *gin.Context) {
+func (app *Application) ListTodos(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 	todos, err := app.Model.Todo.ToDoListing(ctx)
@@ -38,10 +38,16 @@ func (app *Application) listTodos(c *gin.Context) {
 		return
 	}
 
+	msg := []byte("User is active " + app.Username)
+	err = app.Model.Todo.Publish(ctx, msg)
+	if err != nil {
+		panic(err)
+	}
+
 	c.JSON(http.StatusOK, todos)
 }
 
-func (app *Application) updateTodo(c *gin.Context) {
+func (app *Application) UpdateTodo(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -63,10 +69,51 @@ func (app *Application) updateTodo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, todo)
-
 }
 
-func (app *Application) createTodo(c *gin.Context) {
+func (app *Application) SoftDelete(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	err = app.Model.Todo.SoftDelete(ctx, app.Uid, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, "Deleted Successfully")
+}
+
+func (app *Application) SetVisibility(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	object_id, err := strconv.Atoi(c.Param("object_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	err = app.Model.Todo.SetVisibility(ctx, app.Uid, id, object_id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, "Visibility Set Successfully")
+}
+
+func (app *Application) CreateTodo(c *gin.Context) {
 	var todo models.ToDo
 	if err := c.ShouldBindJSON(&todo); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -79,6 +126,12 @@ func (app *Application) createTodo(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	msg := []byte("New to-do item added")
+	err = app.Model.Todo.Publish(ctx, msg)
+	if err != nil {
+		panic(err)
 	}
 
 	c.JSON(http.StatusCreated, todo)
@@ -127,6 +180,13 @@ func (app *Application) GoogleCallback(c *gin.Context) {
 	}
 
 	c.SetCookie("ldata", loginToken, 3600, "/", "", false, true)
+	ctx := context.Background()
+	// defer cancel()
+	msg := []byte("User is active " + app.Username)
+	err = app.Model.Todo.Publish(ctx, msg)
+	if err != nil {
+		panic(err)
+	}
 	c.JSON(http.StatusOK, "login Successfully")
 
 }

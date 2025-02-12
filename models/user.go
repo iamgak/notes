@@ -60,12 +60,10 @@ func (m *UserModel) AuthUser(userdata UserData) (string, error) {
 			return "", err
 		}
 
-		fmt.Println(userdata)
 		// User is not registered, save the user information to the database
 		stmt := "INSERT INTO users (email, name, oauth, oauth_id, picture) VALUES (?, ?, ?,?,?)"
 		result, err := m.db.Exec(stmt, userdata.Email, userdata.Name, userdata.OAuth, userdata.OAuthID, userdata.Picture)
 		if err != nil {
-			fmt.Println(err, stmt)
 			return "", err
 		}
 
@@ -75,9 +73,7 @@ func (m *UserModel) AuthUser(userdata UserData) (string, error) {
 		}
 	}
 
-	fmt.Println(user_id)
 	login_token, err := m.generateToken(userdata.Name, user_id)
-	fmt.Println("generate token", login_token)
 	if err != nil {
 		return "", err
 	}
@@ -94,9 +90,7 @@ func (m *UserModel) ValidToken(login_token string) (int, error) {
 
 func (m *UserModel) SetLoginToken(token, ip_addr string, user_id int64) error {
 	err := m.Logout(user_id)
-	fmt.Println("login token update", err)
 	stmt := fmt.Sprintf("INSERT INTO users_session (login_token, user_id, ip_addr) VALUES ('%s', '%d', '%s' )", token, user_id, ip_addr)
-	fmt.Print(stmt)
 	if err == nil {
 		_, err = m.db.Exec(stmt)
 	}
@@ -115,18 +109,6 @@ func (m *UserModel) ActivityLog(activity string, uid int64) {
 	_, _ = m.db.Exec("INSERT INTO `user_log` SET  activity = ? , uid = ?, superseded = 0", activity, uid)
 }
 
-// create a token for login, user_verification
-// func (app *UserModel) generateToken(addr string, port, user_id int) string {
-// 	data := fmt.Sprintf("Login token %s %d %s", addr, port, strconv.FormatInt(time.Now().Unix(), 10))
-// 	hasher := sha1.New()
-// 	hasher.Write([]byte(data))
-// 	hash := hasher.Sum(nil)
-// 	// Convert hash bytes to a hexadecimal string
-// 	hashStr := fmt.Sprintf("%x", hash)
-
-// 	return hashStr
-// }
-
 func (m *UserModel) generateToken(username string, user_id int64) (string, error) {
 	// Create the claims
 
@@ -141,7 +123,7 @@ func (m *UserModel) generateToken(username string, user_id int64) (string, error
 		username,
 		user_id,
 		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
+			ExpiresAt: time.Now().Add(time.Hour * 4).Unix(), // Token expires in 4 hours
 			IssuedAt:  time.Now().Unix(),
 		},
 	}

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iamgak/todo/models"
@@ -30,7 +32,7 @@ type Application struct {
 	Uid             int
 	isAuthenticated bool
 
-	// isAdmin         bool
+	Username string
 }
 
 // type Config struct {
@@ -71,7 +73,7 @@ func main() {
 	}
 
 	defer db.Close()
-
+	ctx := context.Background()
 	redis_name := "localhost"
 	redis_password := ""
 	client := InitRedis(redis_name, redis_password)
@@ -83,14 +85,26 @@ func main() {
 	maxHeaderBytes := 1 << 20
 
 	server := &http.Server{
-		Addr:    *addr,
-		Handler: app.InitRouter(),
-		// ReadTimeout:    readTimeout,
-		// WriteTimeout:   writeTimeout,
+		Addr:         *addr,
+		Handler:      app.InitRouter(),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		// MaxHeaderBytes: 1 << 20,
 		MaxHeaderBytes: maxHeaderBytes,
 	}
 
 	log.Printf("[info] start http server listening %s", *addr)
+
+	go func() {
+		// msg := []byte("New to-do item added")
+
+		sub := client.Subscribe(ctx, "todo.notifications")
+		ch := sub.Channel()
+		for msg := range ch {
+			fmt.Println("Received message:", msg)
+		}
+
+	}()
 
 	server.ListenAndServe()
 }

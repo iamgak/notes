@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+	"github.com/iamgak/todo/models"
 	"github.com/joho/godotenv"
 )
 
@@ -77,20 +78,21 @@ func (app *Application) LoginMiddleware() gin.HandlerFunc {
 			// )
 			return
 		}
-		userID, err := app.Model.Users.ValidToken(cookie)
-		if err != nil {
-			// deleteCookie(c)
-			c.AbortWithStatus(http.StatusInternalServerError)
-			fmt.Println("Error fetching user info:", err)
-			return
-		}
 
-		if userID <= 0 {
-			// deleteCookie(c)
-			c.Redirect(http.StatusMovedPermanently, "/user/login/")
-			c.Abort()
-			return
-		}
+		// userID, err := app.Model.Users.ValidToken(cookie)
+		// if err != nil {
+		// 	// deleteCookie(c)
+		// 	c.AbortWithStatus(http.StatusInternalServerError)
+		// 	fmt.Println("Error fetching user info:", err)
+		// 	return
+		// }
+
+		// if userID <= 0 {
+		// 	// deleteCookie(c)
+		// 	c.Redirect(http.StatusMovedPermanently, "/user/login/")
+		// 	c.Abort()
+		// 	return
+		// }
 
 		// Parse the token
 		SIGNING_KEY := os.Getenv("SIGNING_KEY")
@@ -103,7 +105,8 @@ func (app *Application) LoginMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		token, err := jwt.ParseWithClaims(cookie, &MyCustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+
+		token, err := jwt.ParseWithClaims(cookie, &models.MyCustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			// Verify the signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("[error] Unexpected signing method: %v", token.Header["alg"])
@@ -120,11 +123,12 @@ func (app *Application) LoginMiddleware() gin.HandlerFunc {
 			return
 		}
 		// Check if the token is valid
-		if claims, ok := token.Claims.(*MyCustomClaims); ok && token.Valid {
+		if claims, ok := token.Claims.(*models.MyCustomClaims); ok && token.Valid {
 			// Set the username in the request context
 			c.Header("Username", claims.Username)
 
-			app.Uid = userID
+			app.Uid = int(claims.UserID)
+			app.Username = claims.Username
 			app.isAuthenticated = true
 			c.Next()
 		} else {
@@ -150,10 +154,4 @@ func authMiddleware() gin.HandlerFunc {
 
 func deleteCookie(c *gin.Context) {
 	c.SetCookie("ldata", "", -1, "/", "", false, true)
-}
-
-// Define a struct to represent the claims in the JWT
-type MyCustomClaims struct {
-	Username string `json:"username"`
-	jwt.StandardClaims
 }

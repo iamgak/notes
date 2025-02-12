@@ -131,6 +131,32 @@ func (c *ToDoModel) ToDoListing(ctx context.Context) ([]*ToDo, error) {
 	return listing, err
 }
 
+func (c *ToDoModel) SoftDelete(ctx context.Context, user_id, object_id int) error {
+	query := `UPDATE todo SET deleted = 1, deleted_at =NOW() WHERE user_id = ? AND id = ?`
+	stmt, err := c.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, user_id, object_id)
+	return err
+}
+
+func (c *ToDoModel) SetVisibility(ctx context.Context, user_id, object_id, visibility int) error {
+	query := `UPDATE todo SET visibility = ? WHERE deleted = 0 AND user_id = ? AND id = ?`
+	stmt, err := c.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, visibility, user_id, object_id)
+	return err
+}
+
 func (c *ToDoModel) getRedis(ctx context.Context, key string) ([]*ToDo, error) {
 	var listing []*ToDo
 	val, err := c.redis.Get(ctx, key).Result()
@@ -150,5 +176,11 @@ func (c *ToDoModel) setRedis(ctx context.Context, key string, value interface{},
 	}
 
 	err = c.redis.Set(ctx, key, data, expiration).Err()
+	return err
+}
+
+func (c *ToDoModel) Publish(ctx context.Context, msg []byte) error {
+	// msg := []byte("New to-do item added")
+	err := c.redis.Publish(ctx, "todo.notifications", msg).Err()
 	return err
 }
