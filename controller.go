@@ -138,6 +138,23 @@ func (app *Application) CreateTodo(c *gin.Context) {
 
 }
 
+func (app *Application) Prompt(c *gin.Context) {
+	var req models.QueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var result models.ResponseBuffer
+	result, err := models.Prompt(req.Parameter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result})
+}
+
 func (app *Application) GoogleCallback(c *gin.Context) {
 	// state := c.Query("state")
 	code := c.Query("code")

@@ -27,7 +27,7 @@ Visibile to all or only me or delete option
 
 Schema:
 
-Updated By others 
+Updated By others --lets see
 DeleteDate
 Visibility
 Tags
@@ -40,4 +40,4 @@ Ratelimiter
 
 Todo:
 
-add middlewares, sso, oauth, kafka
+add middlewares, sso, oauth, kafka ?? pub-sub redis, validator

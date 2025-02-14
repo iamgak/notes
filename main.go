@@ -67,6 +67,7 @@ func main() {
 	dsn := flag.String("dsn", fmt.Sprintf("%s:%s@/%s?parseTime=true", dbUser, dbPassword, dbName), "MySQL data source name")
 
 	flag.Parse()
+	fmt.Print(*dsn)
 	db, err := openDB(*dsn)
 	if err != nil {
 		log.Fatal(err)
