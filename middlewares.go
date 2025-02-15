@@ -127,7 +127,7 @@ func (app *Application) LoginMiddleware() gin.HandlerFunc {
 			// Set the username in the request context
 			c.Header("Username", claims.Username)
 
-			app.Uid = int(claims.UserID)
+			app.UserID = int(claims.UserID)
 			app.Username = claims.Username
 			app.isAuthenticated = true
 			c.Next()

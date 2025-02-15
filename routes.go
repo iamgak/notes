@@ -25,9 +25,10 @@ func (app *Application) InitRouter() *gin.Engine {
 
 		// write API
 		authorise.POST("/", app.CreateTodo)
-		authorise.POST("/:id/update/", app.UpdateTodo)
-		authorise.POST("/:id/visibilty/:object_id/", app.SetVisibility)
-		authorise.POST("/:id/delete/", app.SoftDelete)
+		authorise.POST("/update/:id", app.UpdateTodo)
+		authorise.POST("/visibilty/:id", app.SetVisibility)
+		authorise.POST("/delete/:id", app.SoftDelete)
+		// authorise.POST("/ask_ai/", app.SoftDelete)
 	}
 
 	// r.GET("/", app.getNotesListing)

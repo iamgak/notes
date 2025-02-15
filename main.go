@@ -15,38 +15,13 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type ToDo struct {
-	Title       string
-	Description string
-	Visibility  bool
-	Editable    bool
-	Deleted     bool
-	Updated     bool
-	version     int
-	// Created     date
-}
-
 type Application struct {
 	// Config          Config
 	Model           *models.Init
-	Uid             int
+	UserID          int
 	isAuthenticated bool
-
-	Username string
+	Username        string
 }
-
-// type Config struct {
-// 	port int
-// 	env  string
-// 	// db   struct {
-// 	// 	dsn          string
-// 	// 	maxOpenConns int
-// 	// 	maxIdleConns int
-// 	// 	maxIdleTime  string
-// 	// }
-// }
-
-// const version = "1.0.0.0"
 
 func main() {
 	fmt.Print("To do Web App startet \n")

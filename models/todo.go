@@ -18,6 +18,7 @@ type ToDo struct {
 	Deleted    bool      `json:"deleted"`
 	Updated    bool      `json:"updated"`
 	Version    int       `json:"version"`
+	UserID     int       `json:"_,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -43,8 +44,8 @@ func NewModels(db *sql.DB, redis *redis.Client) *ToDoModel {
 }
 
 func (c *ToDoModel) CreateTodo(ctx context.Context, todo *ToDo) error {
-	query := `INSERT INTO todo (title, content, visibility, editable, created_at, updated_at)
-			  VALUES (?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO notes (title, content, user_id, is_visible, editable)
+			  VALUES (?, ?, ?, ?, ?)`
 
 	stmt, err := c.db.PrepareContext(ctx, query)
 	if err != nil {
@@ -52,14 +53,14 @@ func (c *ToDoModel) CreateTodo(ctx context.Context, todo *ToDo) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, todo.Title, todo.Content, todo.Visibility, todo.Editable, time.Now(), time.Now())
+	_, err = stmt.ExecContext(ctx, todo.Title, todo.Content, todo.UserID, todo.Visibility, todo.Editable)
 	return err
 }
 
 func (c *ToDoModel) UpdateTodo(ctx context.Context, id int, todo *ToDo) error {
-	query := `UPDATE todo
-			  SET title = ?, content = ?, visibility = ?, editable = ?, updated_at = ?
-			  WHERE id = ?`
+	query := `UPDATE notes
+			  SET title = ?, content = ?, is_visibile = ?, editable = ?, updated_at = ?
+			  WHERE id = ? AND user_id = ?`
 
 	stmt, err := c.db.PrepareContext(ctx, query)
 	if err != nil {
@@ -68,13 +69,13 @@ func (c *ToDoModel) UpdateTodo(ctx context.Context, id int, todo *ToDo) error {
 
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, todo.Title, todo.Content, todo.Visibility, todo.Editable, time.Now(), id)
+	_, err = stmt.ExecContext(ctx, todo.Title, todo.Content, todo.Visibility, todo.Editable, time.Now(), id, todo.UserID)
 	return err
 }
 
-func (c *ToDoModel) ToDoListing(ctx context.Context) ([]*ToDo, error) {
-	query := `SELECT id, title, content, visibility, editable, deleted, updated, version, created_at, updated_at 
-				FROM todo`
+func (c *ToDoModel) ToDoListing(ctx context.Context, user_id int) ([]*ToDo, error) {
+	query := `SELECT id, title, content, editable, created_at, updated_at 
+				FROM notes WHERE ( visibility = 1 OR user_id = ?) AND is_deleted = 0`
 
 	queryBytes, err := json.Marshal(query)
 	if err != nil {
@@ -93,7 +94,7 @@ func (c *ToDoModel) ToDoListing(ctx context.Context) ([]*ToDo, error) {
 
 	// var listing []*ToDo
 
-	rows, err := c.db.QueryContext(ctx, query)
+	rows, err := c.db.QueryContext(ctx, query, user_id)
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +132,8 @@ func (c *ToDoModel) ToDoListing(ctx context.Context) ([]*ToDo, error) {
 	return listing, err
 }
 
-func (c *ToDoModel) SoftDelete(ctx context.Context, user_id, object_id int) error {
-	query := `UPDATE todo SET deleted = 1, deleted_at =NOW() WHERE user_id = ? AND id = ?`
+func (c *ToDoModel) SoftDelete(ctx context.Context, user_id, notes_id int) error {
+	query := `UPDATE notes SET is_deleted = 1, deleted_at = NOW() WHERE user_id = ? AND id = ?`
 	stmt, err := c.db.PrepareContext(ctx, query)
 	if err != nil {
 		return err
@@ -140,11 +141,11 @@ func (c *ToDoModel) SoftDelete(ctx context.Context, user_id, object_id int) erro
 
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, user_id, object_id)
+	_, err = stmt.ExecContext(ctx, user_id, notes_id)
 	return err
 }
 
-func (c *ToDoModel) SetVisibility(ctx context.Context, user_id, object_id, visibility int) error {
+func (c *ToDoModel) SetVisibility(ctx context.Context, user_id, notes_id, visibility int) error {
 	query := `UPDATE todo SET visibility = ? WHERE deleted = 0 AND user_id = ? AND id = ?`
 	stmt, err := c.db.PrepareContext(ctx, query)
 	if err != nil {
@@ -153,7 +154,7 @@ func (c *ToDoModel) SetVisibility(ctx context.Context, user_id, object_id, visib
 
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, visibility, user_id, object_id)
+	_, err = stmt.ExecContext(ctx, visibility, user_id, notes_id)
 	return err
 }
 

@@ -40,4 +40,5 @@ Ratelimiter
 
 Todo:
 
-add middlewares, sso, oauth, kafka ?? pub-sub redis, validator
+add middlewares, sso, oauth, kafka or cronjob batch processing, validator, alerts
+limit daily prompt ai usage, Ratelimiter, caching,  data processing, usage monitoring

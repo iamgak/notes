@@ -162,6 +162,6 @@ func Prompt(req string) (ResponseBuffer, error) {
 	resp := ResponseBuffer{
 		response: result,
 	}
-	return resp, err
 
+	return resp, err
 }

@@ -1,25 +1,20 @@
-# Base image: specify the environment
+# Use an official Go image as the base image
 FROM golang:latest
 
-# Set the working directory
-# WORKDIR /app
-
-# Copy the rest of the files
-# COPY . /app
-
-RUN mkdir /app
-
-##set main directory
+# Set the working directory to /app
 WORKDIR /app
 
-##copy the whole file to app
-ADD . /app
+# Copy the current directory (i.e. the directory with the Dockerfile) into the container at /app
+COPY . /app
 
-## get all the packages
+# Install dependencies
 RUN go mod download
 
-##create executeable
-RUN go build -o /app/main .
+# Build the Go application
+RUN go build -o main .
 
-##run executeable
-CMD ["/app/main"]
+# Expose port 8080 for the web application
+EXPOSE 8080
+
+# Run the Go web application
+CMD ["./main"]

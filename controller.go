@@ -80,7 +80,7 @@ func (app *Application) SoftDelete(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	err = app.Model.Todo.SoftDelete(ctx, app.Uid, id)
+	err = app.Model.Todo.SoftDelete(ctx, app.UserID, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -96,7 +96,7 @@ func (app *Application) SetVisibility(c *gin.Context) {
 		return
 	}
 
-	object_id, err := strconv.Atoi(c.Param("object_id"))
+	notes_id, err := strconv.Atoi(c.Param("notes_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -104,7 +104,7 @@ func (app *Application) SetVisibility(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	err = app.Model.Todo.SetVisibility(ctx, app.Uid, id, object_id)
+	err = app.Model.Todo.SetVisibility(ctx, app.UserID, id, notes_id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -120,8 +120,10 @@ func (app *Application) CreateTodo(c *gin.Context) {
 		return
 	}
 
+	//validation
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
+	todo.UserID = app.UserID
 	err := app.Model.Todo.CreateTodo(ctx, &todo)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
