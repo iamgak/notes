@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -25,22 +26,12 @@ type ToDo struct {
 
 type ToDoModel struct {
 	db    *sql.DB
-	redis *redis.Client
+	redis RedisStruct
 }
 
 func (m *ToDoModel) Close() {
-	m.redis.Close()
+	// m.redis.Close()
 	m.db.Close()
-}
-
-func NewModels(db *sql.DB, redis *redis.Client) *ToDoModel {
-	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	return &ToDoModel{
-		db:    db,
-		redis: redis,
-		// cancel: cancel,
-		// ctx:    ctx,
-	}
 }
 
 func (c *ToDoModel) CreateTodo(ctx context.Context, todo *ToDo) error {
@@ -79,13 +70,25 @@ func (c *ToDoModel) ToDoListing(ctx context.Context, user_id int) ([]*ToDo, erro
 
 	queryBytes, err := json.Marshal(query)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	listing := []*ToDo{}
-	val, err := c.getRedis(ctx, string(queryBytes))
+	val, err := c.redis.getRedis(ctx, string(queryBytes))
+
+	if err != nil {
+		return listing, err
+	}
+
+	byteVal, ok := val.([]byte)
+	if !ok {
+		return listing, fmt.Errorf("expected %T to be a []byte", val)
+	}
+	// Deserialize the cached result
+	err = json.Unmarshal(byteVal, &listing)
+
 	if err == nil {
-		return val, err
+		return listing, err
 	}
 
 	if err != redis.Nil {
@@ -128,7 +131,7 @@ func (c *ToDoModel) ToDoListing(ctx context.Context, user_id int) ([]*ToDo, erro
 		return nil, err
 	}
 
-	err = c.setRedis(ctx, string(queryBytes), listing, 5*time.Minute)
+	err = c.redis.setRedis(ctx, string(queryBytes), listing, 5*time.Minute)
 	return listing, err
 }
 
@@ -155,33 +158,5 @@ func (c *ToDoModel) SetVisibility(ctx context.Context, user_id, notes_id, visibi
 	defer stmt.Close()
 
 	_, err = stmt.ExecContext(ctx, visibility, user_id, notes_id)
-	return err
-}
-
-func (c *ToDoModel) getRedis(ctx context.Context, key string) ([]*ToDo, error) {
-	var listing []*ToDo
-	val, err := c.redis.Get(ctx, key).Result()
-	if err != nil {
-		return listing, err
-	}
-
-	// Deserialize the cached result
-	err = json.Unmarshal([]byte(val), &listing)
-	return listing, err
-}
-
-func (c *ToDoModel) setRedis(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-
-	err = c.redis.Set(ctx, key, data, expiration).Err()
-	return err
-}
-
-func (c *ToDoModel) Publish(ctx context.Context, msg []byte) error {
-	// msg := []byte("New to-do item added")
-	err := c.redis.Publish(ctx, "todo.notifications", msg).Err()
 	return err
 }

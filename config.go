@@ -12,19 +12,29 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-func openDB(dsn string) (*sql.DB, error) {
+func openDB() (*sql.DB, error) {
+	dbUser := os.Getenv("DB_USERNAME")
+	dbName := os.Getenv("DB_DATABASE")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbUser == "" || dbName == "" || dbPassword == "" {
+		return nil, fmt.Errorf("missing environment variables: DB_USERNAME, DB_DATABASE, DB_PASSWORD")
+	}
+	// dsn := fmt.Sprintf("host=%s port=5432 user=%s password=%s dbname=%s sslmode=disable", dbHost, dbUser, dbPassword, dbName)
+	dsn := fmt.Sprintf("%s:%s@/%s?parseTime=true", dbUser, dbPassword, dbName)
+	// flag.Parse()
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
 	}
 	if err = db.Ping(); err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 	return db, nil
 }
 
-func InitRedis(name, passw string) *redis.Client {
-
+func InitRedis() *redis.Client {
+	name := "localhost"
+	passw := ""
 	redis_port := 6379
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", name, redis_port),

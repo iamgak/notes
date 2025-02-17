@@ -32,14 +32,14 @@ var AppConfig Config
 func (app *Application) ListTodos(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	todos, err := app.Model.Todo.ToDoListing(ctx)
+	todos, err := app.Model.Todo.ToDoListing(ctx, app.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	msg := []byte("User is active " + app.Username)
-	err = app.Model.Todo.Publish(ctx, msg)
+	err = app.Model.Redis.Publish(ctx, msg)
 	if err != nil {
 		panic(err)
 	}
@@ -131,7 +131,7 @@ func (app *Application) CreateTodo(c *gin.Context) {
 	}
 
 	msg := []byte("New to-do item added")
-	err = app.Model.Todo.Publish(ctx, msg)
+	err = app.Model.Redis.Publish(ctx, msg)
 	if err != nil {
 		panic(err)
 	}
@@ -202,7 +202,7 @@ func (app *Application) GoogleCallback(c *gin.Context) {
 	ctx := context.Background()
 	// defer cancel()
 	msg := []byte("User is active " + app.Username)
-	err = app.Model.Todo.Publish(ctx, msg)
+	err = app.Model.Redis.Publish(ctx, msg)
 	if err != nil {
 		panic(err)
 	}

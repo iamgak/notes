@@ -38,6 +38,9 @@ CREATE TABLE notes (
 	updated_at DATETIME DEFAULT NULL
   );
   
+  CREATE TABLE notes_log (
+
+  );
     
 CREATE TABLE notes_alert (
 	id INT PRIMARY KEY AUTO_INCREMENT,

@@ -11,7 +11,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iamgak/todo/models"
-	"github.com/joho/godotenv"
+	"github.com/iamgak/todo/pkg/others"
 	_ "github.com/lib/pq"
 )
 
@@ -25,34 +25,27 @@ type Application struct {
 
 func main() {
 	fmt.Print("To do Web App startet \n")
-	// var cfg Config
 
-	err := godotenv.Load()
+	err := others.LoadEnvVariables()
 	if err != nil {
-		log.Fatal("Error loading .env file:", err)
+		panic(err)
 	}
 
-	dbUser := os.Getenv("DB_USERNAME")
-	dbName := os.Getenv("DB_DATABASE")
 	Port := os.Getenv("PORT")
-	dbPassword := os.Getenv("DB_PASSWORD")
-
 	addr := flag.String("addr", ":"+Port, "HTTP network address")
-	// dsn := fmt.Sprintf("host=%s port=5432 user=%s password=%s dbname=%s sslmode=disable", dbHost, dbUser, dbPassword, dbName)
-	dsn := flag.String("dsn", fmt.Sprintf("%s:%s@/%s?parseTime=true", dbUser, dbPassword, dbName), "MySQL data source name")
-
 	flag.Parse()
-	fmt.Print(*dsn)
-	db, err := openDB(*dsn)
+	db, err := openDB()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	defer db.Close()
 	ctx := context.Background()
-	redis_name := "localhost"
-	redis_password := ""
-	client := InitRedis(redis_name, redis_password)
+	client := InitRedis()
+	if client == nil {
+		panic(fmt.Errorf("redis client is %T", client))
+	}
+
 	app := Application{
 		Model: models.Constructor(db, client),
 		// Config: cfg,
@@ -69,18 +62,16 @@ func main() {
 		MaxHeaderBytes: maxHeaderBytes,
 	}
 
-	log.Printf("[info] start http server listening %s", *addr)
-
 	go func() {
-		// msg := []byte("New to-do item added")
-
+		//later on create a function to init all the function
+		// app.Model.Redis.Subscribe(ctx)
 		sub := client.Subscribe(ctx, "todo.notifications")
 		ch := sub.Channel()
 		for msg := range ch {
 			fmt.Println("Received message:", msg)
 		}
-
 	}()
 
+	log.Printf("[info] start http server listening %s", *addr)
 	server.ListenAndServe()
 }
